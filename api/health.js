@@ -1,6 +1,6 @@
 /* ═══ Health Check ═══ */
-import { connectDB } from './lib/db.js';
-import { handleCors, setCorsHeaders } from './lib/auth.js';
+import { connectDB } from '../lib/db.js';
+import { handleCors, setCorsHeaders } from '../lib/auth.js';
 import mongoose from 'mongoose';
 
 export default async function handler(req, res) {

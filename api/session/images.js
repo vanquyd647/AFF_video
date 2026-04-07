@@ -1,9 +1,9 @@
 /* ═══ Save Images ═══
    PUT /api/session/images
 */
-import { connectDB } from '../lib/db.js';
-import { authenticateRequest, handleCors, setCorsHeaders } from '../lib/auth.js';
-import Session from '../lib/models/Session.js';
+import { connectDB } from '../../lib/db.js';
+import { authenticateRequest, handleCors, setCorsHeaders } from '../../lib/auth.js';
+import Session from '../../lib/models/Session.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;

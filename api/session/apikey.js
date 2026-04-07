@@ -2,10 +2,10 @@
    POST /api/session/apikey → Save API key (encrypted)
    GET  /api/session/apikey → Check if API key exists
 */
-import { connectDB } from '../lib/db.js';
-import { authenticateRequest, handleCors, setCorsHeaders } from '../lib/auth.js';
-import { encryptApiKey, validateApiKey } from '../lib/gemini.js';
-import Session from '../lib/models/Session.js';
+import { connectDB } from '../../lib/db.js';
+import { authenticateRequest, handleCors, setCorsHeaders } from '../../lib/auth.js';
+import { encryptApiKey, validateApiKey } from '../../lib/gemini.js';
+import Session from '../../lib/models/Session.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;

@@ -3,9 +3,9 @@
    GET  /api/session → Get session
    DELETE /api/session → Delete session
 */
-import { connectDB } from '../lib/db.js';
-import { handleCors, setCorsHeaders } from '../lib/auth.js';
-import Session from '../lib/models/Session.js';
+import { connectDB } from '../../lib/db.js';
+import { handleCors, setCorsHeaders } from '../../lib/auth.js';
+import Session from '../../lib/models/Session.js';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {

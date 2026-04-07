@@ -1,9 +1,9 @@
 /* ═══ History List ═══
    GET /api/history
 */
-import { connectDB } from '../lib/db.js';
-import { authenticateRequest, handleCors, setCorsHeaders } from '../lib/auth.js';
-import History from '../lib/models/History.js';
+import { connectDB } from '../../lib/db.js';
+import { authenticateRequest, handleCors, setCorsHeaders } from '../../lib/auth.js';
+import History from '../../lib/models/History.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;

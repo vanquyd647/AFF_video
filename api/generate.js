@@ -1,13 +1,13 @@
 /* ═══ Generate: Analyze + Create Prompts ═══
    POST /api/generate
 */
-import { connectDB } from './lib/db.js';
-import { authenticateRequest, handleCors, setCorsHeaders } from './lib/auth.js';
-import { decryptApiKey, generateText } from './lib/gemini.js';
-import { optimizeImages } from './lib/tokenOptimizer.js';
+import { connectDB } from '../lib/db.js';
+import { authenticateRequest, handleCors, setCorsHeaders } from '../lib/auth.js';
+import { decryptApiKey, generateText } from '../lib/gemini.js';
+import { optimizeImages } from '../lib/tokenOptimizer.js';
 import { buildMegaPrompt } from '../src/templates.js';
-import History from './lib/models/History.js';
-import Session from './lib/models/Session.js';
+import History from '../lib/models/History.js';
+import Session from '../lib/models/Session.js';
 
 export default async function handler(req, res) {
   if (handleCors(req, res)) return;
