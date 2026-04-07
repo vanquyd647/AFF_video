@@ -1,30 +1,108 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import './index.css';
 import { MODELS, validateApiKey, generateText, fileToBase64 } from './api';
 import { CATEGORIES, VIDEO_STYLES, DURATION_OPTIONS, buildMegaPrompt } from './templates';
 
+// ─── Session helpers ───
+const SESSION_KEY = 'tiktok_ai_session';
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveSession(data) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch (e) {
+    // localStorage full — clear old data and retry
+    if (e.name === 'QuotaExceededError') {
+      localStorage.removeItem(SESSION_KEY);
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch {}
+    }
+  }
+}
+
+// Recreate blob URLs from base64 data
+function restoreImageUrls(images) {
+  if (!images?.length) return [];
+  return images.map(img => {
+    if (img.url && img.url.startsWith('blob:')) {
+      // Old blob URL is dead after page reload, recreate
+      try {
+        const byteChars = atob(img.data);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([new Uint8Array(byteNums)], { type: img.mimeType || 'image/jpeg' });
+        return { ...img, url: URL.createObjectURL(blob) };
+      } catch { return { ...img, url: '' }; }
+    }
+    return img;
+  });
+}
+
+function restoreSingleImage(img) {
+  if (!img?.data) return null;
+  try {
+    const byteChars = atob(img.data);
+    const byteNums = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([new Uint8Array(byteNums)], { type: img.mimeType || 'image/jpeg' });
+    return { ...img, url: URL.createObjectURL(blob) };
+  } catch { return null; }
+}
+
 export default function App() {
-  // ─── State ───
-  const [step, setStep] = useState(0);
+  // ─── Load saved session ───
+  const [session] = useState(() => loadSession());
+
+  // ─── State (restored from session) ───
+  const [step, setStep] = useState(session.step || 0);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [apiStatus, setApiStatus] = useState('idle');
   const [showKey, setShowKey] = useState(false);
-  const [textModel, setTextModel] = useState(MODELS.text[0].id);
+  const [textModel, setTextModel] = useState(session.textModel || MODELS.text[0].id);
 
-  // Product
-  const [productImages, setProductImages] = useState([]);
-  const [portraitEnabled, setPortraitEnabled] = useState(false);
-  const [portraitImage, setPortraitImage] = useState(null);
-  const [category, setCategory] = useState('auto');
-  const [notes, setNotes] = useState('');
+  // Product (restored)
+  const [productImages, setProductImages] = useState(() => restoreImageUrls(session.productImages));
+  const [portraitEnabled, setPortraitEnabled] = useState(session.portraitEnabled || false);
+  const [portraitImage, setPortraitImage] = useState(() => restoreSingleImage(session.portraitImage));
+  const [category, setCategory] = useState(session.category || 'auto');
+  const [notes, setNotes] = useState(session.notes || '');
 
-  // Video config — TRƯỚC KHI phân tích
-  const [videoStyle, setVideoStyle] = useState('product_showcase');
-  const [duration, setDuration] = useState(16);
+  // Video config (restored)
+  const [videoStyle, setVideoStyle] = useState(session.videoStyle || 'product_showcase');
+  const [duration, setDuration] = useState(session.duration || 16);
 
-  // Results from AI (all-in-one)
-  const [result, setResult] = useState(null); // { analysis, storyboardSummary, frames, clips }
+  // Results (restored)
+  const [result, setResult] = useState(session.result || null);
   const [generating, setGenerating] = useState(false);
+
+  // ─── Auto-save session on state change ───
+  useEffect(() => {
+    // Strip blob URLs (not serializable), keep base64 data
+    const imgData = productImages.map(({ url, file, ...rest }) => rest);
+    const portraitData = portraitImage ? (({ url, file, ...rest }) => rest)(portraitImage) : null;
+
+    saveSession({
+      step, textModel, category, notes, videoStyle, duration,
+      portraitEnabled,
+      productImages: imgData,
+      portraitImage: portraitData,
+      result,
+    });
+  }, [step, textModel, productImages, portraitEnabled, portraitImage, category, notes, videoStyle, duration, result]);
+
+  // ─── Auto-validate saved API key on mount ───
+  useEffect(() => {
+    if (apiKey) {
+      validateApiKey(apiKey).then(r => {
+        if (r.valid) setApiStatus('valid');
+      });
+    }
+  }, []);
 
   // Toast
   const [toasts, setToasts] = useState([]);
@@ -98,17 +176,14 @@ export default function App() {
         imageCount: productImages.length,
       });
 
-      // Send all images to the AI model
       const images = productImages.map(img => ({ data: img.data, mimeType: img.mimeType }));
 
-      addToast(`🧠 Đang phân tích ${productImages.length} ảnh + sinh ${DURATION_OPTIONS.find(d => d.seconds === duration)?.frames} frame prompts + ${DURATION_OPTIONS.find(d => d.seconds === duration)?.clips} clip prompts...`, 'info');
+      addToast(`🧠 Đang phân tích ${productImages.length} ảnh + sinh prompts... (30-60s)`, 'info');
 
       const raw = await generateText(apiKey, textModel, prompt, images);
 
-      // Parse JSON
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('AI không trả về JSON hợp lệ. Thử lại hoặc đổi model.');
-      const parsed = JSON.parse(jsonMatch[0]);
+      // Robust JSON parsing
+      const parsed = parseAIResponse(raw);
 
       if (!parsed.frames?.length || !parsed.clips?.length) {
         throw new Error('AI trả về thiếu dữ liệu frames hoặc clips. Thử lại.');
@@ -116,7 +191,7 @@ export default function App() {
 
       setResult(parsed);
       setStep(2);
-      addToast(`✅ Hoàn tất! ${parsed.frames.length} frame prompts + ${parsed.clips.length} clip prompts`, 'success');
+      addToast(`✅ Hoàn tất! ${parsed.frames.length} frames + ${parsed.clips.length} clips`, 'success');
     } catch (err) {
       addToast(`❌ Lỗi: ${err.message}`, 'error');
     } finally {
@@ -400,6 +475,107 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// ═══════════════ JSON PARSER (robust) ═══════════════
+
+function parseAIResponse(raw) {
+  // Extract JSON block from AI response
+  let jsonStr = raw;
+
+  // Try to find JSON in markdown code block first
+  const codeBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  } else {
+    // Find the outermost { ... }
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('AI không trả về JSON hợp lệ. Thử lại hoặc đổi model.');
+    }
+    jsonStr = raw.substring(firstBrace, lastBrace + 1);
+  }
+
+  // Sanitize common AI JSON issues
+  jsonStr = sanitizeJSON(jsonStr);
+
+  // Try parsing
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e1) {
+    // Second attempt: more aggressive cleanup
+    try {
+      jsonStr = aggressiveSanitize(jsonStr);
+      return JSON.parse(jsonStr);
+    } catch (e2) {
+      throw new Error(`JSON parse lỗi: ${e1.message}. Thử lại hoặc đổi model khác (Gemini 2.5 Pro ổn hơn).`);
+    }
+  }
+}
+
+function sanitizeJSON(str) {
+  // Remove single-line comments (// ...)
+  str = str.replace(/\/\/[^\n]*/g, '');
+
+  // Remove multi-line comments (/* ... */)
+  str = str.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Remove trailing commas before } or ]
+  str = str.replace(/,\s*([\]}])/g, '$1');
+
+  // Remove control characters (except \n \r \t)
+  str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+
+  return str;
+}
+
+function aggressiveSanitize(str) {
+  // Fix unescaped newlines inside string values
+  // Strategy: process character by character
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+
+    if (inString && (ch === '\n' || ch === '\r')) {
+      // Replace unescaped newlines in strings with \\n
+      result += '\\n';
+      continue;
+    }
+
+    if (inString && ch === '\t') {
+      result += '\\t';
+      continue;
+    }
+
+    result += ch;
+  }
+
+  // Remove trailing commas again
+  result = result.replace(/,\s*([\]}])/g, '$1');
+
+  return result;
 }
 
 // ═══════════════ COMPONENTS ═══════════════
