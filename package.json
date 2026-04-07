@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "docker:down": "docker-compose down",
+    "vercel-build": "vite build"
   },
   "dependencies": {
     "cors": "^2.8.5",
