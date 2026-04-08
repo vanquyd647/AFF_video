@@ -35,9 +35,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Cần ít nhất 1 ảnh sản phẩm' });
     }
 
+    const validImages = images.filter(img => typeof img?.data === 'string' && img.data.trim().length > 0);
+    if (!validImages.length) {
+      return res.status(400).json({ error: 'Dữ liệu ảnh không hợp lệ. Mỗi ảnh cần trường data (base64).' });
+    }
+
     // Optimize images (compress + resize)
-    console.log(`[OPTIMIZE] ${images.length} images before sending to Gemini...`);
-    const { images: optimizedImages, stats } = await optimizeImages(images);
+    console.log(`[OPTIMIZE] ${validImages.length} images before sending to Gemini...`);
+    const { images: optimizedImages, stats } = await optimizeImages(validImages);
+
+    if (!optimizedImages.length) {
+      return res.status(400).json({ error: 'Không có ảnh hợp lệ để xử lý. Vui lòng tải lại ảnh và thử lại.' });
+    }
+
     console.log(`[OPTIMIZE] Saved ${stats.totalSavedPercent}% (${Math.round(stats.totalOriginal / 1024)}KB → ${Math.round(stats.totalOptimized / 1024)}KB)`);
 
     // Build prompt
@@ -70,7 +80,7 @@ export default async function handler(req, res) {
       await History.create({
         sessionToken: session.token,
         type: 'generation',
-        input: { imageCount: images.length, category, duration, videoStyle, model, notes },
+        input: { imageCount: validImages.length, category, duration, videoStyle, model, notes },
         result: parsed,
         tokenUsage,
         durationMs,
@@ -99,6 +109,10 @@ export default async function handler(req, res) {
 
 // ═══ JSON Parser (robust) ═══
 function parseAIResponse(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    throw new Error('AI không trả về nội dung hợp lệ. Thử lại hoặc đổi model.');
+  }
+
   let jsonStr = raw;
 
   const codeBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
