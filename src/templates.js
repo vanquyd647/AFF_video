@@ -7,6 +7,7 @@
 export const CATEGORIES = [
   { id: 'auto', label: '🤖 Auto Detect', icon: '🤖' },
   { id: 'fashion', label: '👗 Thời Trang', icon: '👗' },
+  { id: 'victoria_secret', label: '🪽 Victoria Secret', icon: '🪽' },
   { id: 'electronics', label: '📱 Điện Tử', icon: '📱' },
   { id: 'home', label: '🏠 Đồ Gia Dụng', icon: '🏠' },
   { id: 'bedding', label: '🛏️ Chăn Gối Nệm', icon: '🛏️' },
@@ -45,12 +46,15 @@ export function buildMegaPrompt({ category, notes, duration, videoStyle, hasPort
   const style = VIDEO_STYLES.find(s => s.id === videoStyle) || VIDEO_STYLES[0];
   const catLabel = category === 'auto' ? 'Tự nhận diện' : (CATEGORIES.find(c => c.id === category)?.label || category);
   const isBedding = category === 'bedding';
+  const isVictoriaSecret = category === 'victoria_secret';
 
   const peopleGuideline = hasPortrait
     ? '- Có ảnh chân dung người dùng/KOL → tích hợp người này vào scenes phù hợp'
     : (isBedding
       ? '- Không có chân dung → với chăn gối nệm vẫn phải có tương tác người thật (tay/người mẫu ẩn danh, không cần lộ mặt rõ)'
-      : '- Không có chân dung → chỉ dùng tay/bàn tay hoặc không có người');
+      : (isVictoriaSecret
+        ? '- Không có chân dung → dùng người mẫu ẩn danh toàn thân/half-body để thể hiện trang phục, không cần cận mặt'
+        : '- Không có chân dung → chỉ dùng tay/bàn tay hoặc không có người'));
 
   const beddingSpecificRules = isBedding ? `
 === QUY TẮC RIÊNG CHO DANH MỤC CHĂN GỐI NỆM ===
@@ -58,6 +62,16 @@ export function buildMegaPrompt({ category, notes, duration, videoStyle, hasPort
 - Gợi ý hành động: vuốt/chạm bề mặt chăn, ôm gối, nằm hoặc ngồi thử nệm, kéo chăn phủ người, tựa đầu thư giãn.
 - Nếu không có ảnh chân dung, dùng người mẫu ẩn danh hoặc khung hình crop tay/thân người; không cần nhận diện khuôn mặt.
 - Trong mọi cảnh tương tác, sản phẩm vẫn phải là chủ thể chính và thấy rõ texture, độ phồng, độ mềm/êm.
+` : '';
+
+  const victoriaSpecificRules = isVictoriaSecret ? `
+=== QUY TẮC RIÊNG CHO NHÓM VICTORIA SECRET ===
+- Định hướng visual: high-fashion, elegant, premium, editorial runway.
+- Nội dung phải mang tính thời trang chuyên nghiệp, tránh từ ngữ nhạy cảm/gợi dục hoặc mô tả phản cảm.
+- Nhấn mạnh outfit, chất liệu vải, chuyển động vải, thần thái tự tin và ánh sáng cinematic.
+- Mỗi clip mô tả rõ Motion Amount (low/medium/high) và Cinematography (orbit/follow/zoom in/dolly).
+- BẮT BUỘC tạo thêm trường "videoPromptPack" gồm đúng 4 prompt image-to-video độc lập cho Veo.
+- Mỗi prompt trong pack phải có: hành động cụ thể, bối cảnh, ánh sáng, camera movement, cùng các từ khóa consistency: highly detailed, photorealistic, consistent facial features.
 ` : '';
 
   return `Bạn là chuyên gia TikTok Marketing hàng đầu, đồng thời là cinematographer và art director chuyên nghiệp. 
@@ -75,6 +89,7 @@ ${peopleGuideline}
 ${notes ? `- Ghi chú của người dùng: ${notes}` : ''}
 
 ${beddingSpecificRules}
+${victoriaSpecificRules}
 
 === QUY TẮC N+1 STORYBOARD ===
 Video gồm ${dur.clips} clip, mỗi clip 8s. Clip i dùng Frame i làm FIRST FRAME và Frame i+1 làm LAST FRAME.
@@ -89,6 +104,7 @@ Mỗi frame prompt phải:
 4. Prompt phải DÀI, CHI TIẾT (ít nhất 150 từ/prompt), bằng tiếng Anh, dùng cho Nano Banana Pro
 5. Bao gồm: camera angle, lighting setup, color palette, mood, composition details, product placement
 ${isBedding ? '6. Riêng chăn gối nệm: tối thiểu 2 frame có tương tác người thật để thể hiện cảm giác mềm, êm, thoải mái.' : ''}
+${isVictoriaSecret ? '6. Riêng Victoria Secret: ưu tiên bố cục editorial runway/luxury lifestyle, tôn chất liệu và phom dáng trang phục theo hướng thời trang cao cấp.' : ''}
 
 === YÊU CẦU TỪNG VIDEO CLIP PROMPT ===
 Mỗi video clip prompt phải:
@@ -99,6 +115,10 @@ Mỗi video clip prompt phải:
 5. Prompt phải DÀI, CHI TIẾT (ít nhất 200 từ/prompt), bằng tiếng Anh, dùng cho Veo 3.1
 6. Mô tả first frame và last frame để Veo 3.1 interpolate chính xác
 ${isBedding ? '7. Riêng chăn gối nệm: ít nhất 1 clip phải có hành động tương tác cơ thể thật với sản phẩm (ôm gối, nằm/ngồi thử nệm, vuốt bề mặt chăn).' : ''}
+${isVictoriaSecret ? '7. Riêng Victoria Secret: đảm bảo chuyển động thời trang tự nhiên (catwalk, xoay người nhẹ, tóc/vải chuyển động), camera theo chuyển động mượt và photorealistic.' : ''}
+
+${isVictoriaSecret ? `=== GÓI 4 CÂU LỆNH VIDEO BỔ SUNG ===
+Ngoài "clips" theo storyboard N+1, trả thêm trường "videoPromptPack" với ĐÚNG 4 phần tử để dùng trực tiếp cho bài toán image-to-video.` : ''}
 
 === FORMAT OUTPUT (JSON) ===
 Trả về ĐÚNG JSON, không thêm text nào khác:
@@ -106,7 +126,7 @@ Trả về ĐÚNG JSON, không thêm text nào khác:
 {
   "analysis": {
     "productName": "Tên sản phẩm nhận diện được từ ảnh",
-    "category": "ID danh mục (fashion/cosmetics/food/electronics/home/health/bedding/accessories/other)",
+    "category": "ID danh mục (fashion/victoria_secret/cosmetics/food/electronics/home/health/bedding/accessories/other)",
     "keyFeatures": ["Đặc điểm nổi bật 1 từ ảnh", "Đặc điểm 2", "Đặc điểm 3", "Đặc điểm 4"],
     "visualDescription": "Mô tả chi tiết hình ảnh sản phẩm: màu sắc, hình dáng, chất liệu, kích thước, logo, text trên SP...",
     "targetAudience": "Đối tượng mục tiêu (tuổi, giới tính, sở thích cụ thể)",
@@ -134,7 +154,16 @@ Trả về ĐÚNG JSON, không thêm text nào khác:
       "description": "Mô tả ngắn bằng tiếng Việt hành động trong clip này",
       "prompt": "FULL English prompt for Veo 3.1 video generation (200+ words). Describes: starting state matching Frame 0, ending state matching Frame 1, camera movement (pan/zoom/dolly/orbit direction and speed), product interaction and motion, lighting transitions, pacing per second (0-2s: ..., 3-5s: ..., 6-8s: ...), sound design hints, emotional arc of this segment. The description must clearly connect the first frame to the last frame so Veo 3.1 creates seamless interpolation. Vertical 9:16 TikTok format."
     }
-  ]
+  ]${isVictoriaSecret ? `,
+  "videoPromptPack": [
+    {
+      "index": 0,
+      "label": "Style variation name (e.g. Runway Spotlight)",
+      "motionAmount": "low|medium|high",
+      "cinematography": "orbit|follow|zoom in|dolly",
+      "prompt": "English image-to-video prompt for Veo. Include model action, environment interaction, lighting, camera move, and consistency keywords: highly detailed, photorealistic, consistent facial features."
+    }
+  ]` : ''}
 }
 
 CHỈ TRẢ VỀ JSON HỢP LỆ. Tất cả frame prompts và clip prompts phải bằng tiếng Anh, chi tiết, dài. analysis và description bằng tiếng Việt.`;

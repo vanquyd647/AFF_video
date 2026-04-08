@@ -486,6 +486,25 @@ export default function App() {
               ))}
             </div>
 
+            {result.videoPromptPack?.length > 0 && (
+              <div className="glass-card" style={{ marginBottom: '20px' }}>
+                <div className="card-header"><div className="card-icon purple">🎥</div><h3>Image-to-Video Prompt Pack — {result.videoPromptPack.length} Prompts</h3></div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--c-text-3)', marginBottom: '12px' }}>
+                  Bộ prompt bổ sung cho Veo (image-to-video), phù hợp các biến thể quay khác nhau.
+                </p>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => copyAll(result.videoPromptPack, 'prompt', 'Video Prompt Pack')}>📋 Copy Tất Cả Video Prompt Pack</button>
+                </div>
+                {result.videoPromptPack.map((item, i) => (
+                  <PromptCard key={i}
+                    title={`Pack ${i + 1}/${result.videoPromptPack.length} — ${item.label || `Variation ${i + 1}`}`}
+                    subtitle={[item.motionAmount ? `Motion: ${item.motionAmount}` : '', item.cinematography ? `Camera: ${item.cinematography}` : ''].filter(Boolean).join(' | ') || item.description}
+                    prompt={item.prompt}
+                    onCopy={() => copy(item.prompt, `Video Pack ${i + 1}`)} />
+                ))}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="btn btn-ghost" onClick={() => setStep(1)}>← Quay lại chỉnh sửa</button>
               <button className="btn btn-secondary" onClick={() => {
