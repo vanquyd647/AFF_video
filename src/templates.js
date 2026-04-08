@@ -44,6 +44,21 @@ export function buildMegaPrompt({ category, notes, duration, videoStyle, hasPort
   const dur = DURATION_OPTIONS.find(d => d.seconds === duration) || DURATION_OPTIONS[0];
   const style = VIDEO_STYLES.find(s => s.id === videoStyle) || VIDEO_STYLES[0];
   const catLabel = category === 'auto' ? 'Tự nhận diện' : (CATEGORIES.find(c => c.id === category)?.label || category);
+  const isBedding = category === 'bedding';
+
+  const peopleGuideline = hasPortrait
+    ? '- Có ảnh chân dung người dùng/KOL → tích hợp người này vào scenes phù hợp'
+    : (isBedding
+      ? '- Không có chân dung → với chăn gối nệm vẫn phải có tương tác người thật (tay/người mẫu ẩn danh, không cần lộ mặt rõ)'
+      : '- Không có chân dung → chỉ dùng tay/bàn tay hoặc không có người');
+
+  const beddingSpecificRules = isBedding ? `
+=== QUY TẮC RIÊNG CHO DANH MỤC CHĂN GỐI NỆM ===
+- BẮT BUỘC có ít nhất 2 scene/frame thể hiện tương tác người thật để tăng cảm giác chân thực.
+- Gợi ý hành động: vuốt/chạm bề mặt chăn, ôm gối, nằm hoặc ngồi thử nệm, kéo chăn phủ người, tựa đầu thư giãn.
+- Nếu không có ảnh chân dung, dùng người mẫu ẩn danh hoặc khung hình crop tay/thân người; không cần nhận diện khuôn mặt.
+- Trong mọi cảnh tương tác, sản phẩm vẫn phải là chủ thể chính và thấy rõ texture, độ phồng, độ mềm/êm.
+` : '';
 
   return `Bạn là chuyên gia TikTok Marketing hàng đầu, đồng thời là cinematographer và art director chuyên nghiệp. 
 
@@ -56,8 +71,10 @@ Phân tích ${imageCount > 1 ? `${imageCount} ảnh sản phẩm đính kèm` : 
 - Số frame cần tạo: ${dur.frames} ảnh (thuật toán N+1: ${dur.clips} clips cần ${dur.frames} keyframes)
 - Loại sản phẩm: ${catLabel}
 - Tỷ lệ: 9:16 (dọc, TikTok)
-${hasPortrait ? `- Có ảnh chân dung người dùng/KOL → tích hợp người này vào scenes phù hợp` : '- Không có chân dung → chỉ dùng tay/bàn tay hoặc không có người'}
+${peopleGuideline}
 ${notes ? `- Ghi chú của người dùng: ${notes}` : ''}
+
+${beddingSpecificRules}
 
 === QUY TẮC N+1 STORYBOARD ===
 Video gồm ${dur.clips} clip, mỗi clip 8s. Clip i dùng Frame i làm FIRST FRAME và Frame i+1 làm LAST FRAME.
@@ -71,6 +88,7 @@ Mỗi frame prompt phải:
 3. LIÊN KẾT với frame trước/sau (mô tả sao cho ảnh liền kề có thể chuyển cảnh mượt)
 4. Prompt phải DÀI, CHI TIẾT (ít nhất 150 từ/prompt), bằng tiếng Anh, dùng cho Nano Banana Pro
 5. Bao gồm: camera angle, lighting setup, color palette, mood, composition details, product placement
+${isBedding ? '6. Riêng chăn gối nệm: tối thiểu 2 frame có tương tác người thật để thể hiện cảm giác mềm, êm, thoải mái.' : ''}
 
 === YÊU CẦU TỪNG VIDEO CLIP PROMPT ===
 Mỗi video clip prompt phải:
@@ -80,6 +98,7 @@ Mỗi video clip prompt phải:
 4. Bao gồm: camera movement, lighting changes, actions, transitions, audio cues
 5. Prompt phải DÀI, CHI TIẾT (ít nhất 200 từ/prompt), bằng tiếng Anh, dùng cho Veo 3.1
 6. Mô tả first frame và last frame để Veo 3.1 interpolate chính xác
+${isBedding ? '7. Riêng chăn gối nệm: ít nhất 1 clip phải có hành động tương tác cơ thể thật với sản phẩm (ôm gối, nằm/ngồi thử nệm, vuốt bề mặt chăn).' : ''}
 
 === FORMAT OUTPUT (JSON) ===
 Trả về ĐÚNG JSON, không thêm text nào khác:
@@ -87,7 +106,7 @@ Trả về ĐÚNG JSON, không thêm text nào khác:
 {
   "analysis": {
     "productName": "Tên sản phẩm nhận diện được từ ảnh",
-    "category": "ID danh mục (fashion/cosmetics/food/electronics/home/health/accessories/other)",
+    "category": "ID danh mục (fashion/cosmetics/food/electronics/home/health/bedding/accessories/other)",
     "keyFeatures": ["Đặc điểm nổi bật 1 từ ảnh", "Đặc điểm 2", "Đặc điểm 3", "Đặc điểm 4"],
     "visualDescription": "Mô tả chi tiết hình ảnh sản phẩm: màu sắc, hình dáng, chất liệu, kích thước, logo, text trên SP...",
     "targetAudience": "Đối tượng mục tiêu (tuổi, giới tính, sở thích cụ thể)",
